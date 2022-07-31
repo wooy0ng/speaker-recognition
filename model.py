@@ -48,9 +48,8 @@ class SpeakerRecognition(nn.Module):
     def _forward(self, x) -> torch.Tensor:
         # d-vector's dim : 64
         out, (h, c) = self.lstm(x) 
-        out = out[:, -1, :]
         return out
 
     def forward(self, x) -> torch.Tensor:
-        context = self._forward(x)
-        return context
+        d_vectors = self._forward(x)
+        return d_vectors
