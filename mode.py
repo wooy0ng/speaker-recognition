@@ -43,6 +43,7 @@ def train(args) -> None:
                 result = torch.stack(result).squeeze()
                 contexts_avg = torch.mean(result, dim=0).unsqueeze(dim=0)
 
+                # 1) cosine similarity loss
                 loss = 1.0 - F.cosine_similarity(contexts_avg, context)
                 optimizer.zero_grad()
                 loss.backward()
@@ -85,7 +86,7 @@ def validation(args) -> None:
         for idx, data in enumerate(val_loader):
             data = data.to(device)
             context = model(data)
-        
+
             cosine_sim = F.cosine_similarity(contexts_avg, context)
             print(dataset.file_names[idx] + ' : {:.4f}'.format(cosine_sim.item()))
     return

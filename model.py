@@ -38,8 +38,14 @@ class SpeakerRecognition(nn.Module):
             hidden_size=hidden_size,
             num_layers=num_layers
         )
+        self.init_weights()
 
-    def _forward(self, x):
+    def init_weights(self) -> None:
+        for name, param in self.named_parameters():
+            nn.init.normal_(param)
+        return
+
+    def _forward(self, x) -> torch.Tensor:
         # d-vector's dim : 64
         out, (h, c) = self.lstm(x) 
         out = out[:, -1, :]
