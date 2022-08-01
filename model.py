@@ -28,15 +28,27 @@ class SpeakerRecognition(nn.Module):
             input_size : int,
             hidden_size : int,
             num_layers : int,
+            batch_size: int,
             **kwargs : Any
         ) -> None:
         super(SpeakerRecognition, self).__init__()
         lstm_block = CustomLSTM
+        self.kwargs = kwargs
+        self.batch_size = batch_size
+        self.contexts = []
 
         self.lstm = lstm_block(
             input_size=input_size,
             hidden_size=hidden_size,
             num_layers=num_layers
+        )
+        self.clf = nn.Sequential(
+            nn.Linear(hidden_size, hidden_size*4, bias=True),
+            nn.ReLU(inplace=True),
+            nn.Linear(hidden_size*4 ,hidden_size, bias=True),
+            nn.ReLU(inplace=True),
+            nn.Linear(hidden_size, 1, bias=True),
+            nn.Sigmoid()
         )
         self.init_weights()
 
@@ -45,11 +57,26 @@ class SpeakerRecognition(nn.Module):
             nn.init.normal_(param)
         return
 
-    def _forward(self, x) -> torch.Tensor:
-        # d-vector's dim : 64
-        out, (h, c) = self.lstm(x) 
+    def _forward(self, x) -> Optional[torch.Tensor]:
+        # d-vector
+        d_vectors, (h, c) = self.lstm(x)
+        if 'normalize' in self.kwargs.keys():
+            if self.kwargs['normalize'] is True:
+                d_vectors = F.normalize(d_vectors, p=2, dim=2)
+        # d_vectors_avg = torch.mean(d_vectors, dim=1)
+        # clf = self.clf(d_vectors_avg)
+        self.context = d_vectors[:, -1, :]
+        self.contexts.append(self.context)
+        if len(self.contexts) < self.batch_size:
+            return
+        contexts = torch.stack(self.contexts)
+        self.contexts = []
+        if self.batch_size > 1:
+            out = contexts.mean(dim=0)
+        else:
+            out = contexts.squeeze(0)
         return out
 
-    def forward(self, x) -> torch.Tensor:
-        d_vectors = self._forward(x)
-        return d_vectors
+    def forward(self, x) -> Optional[torch.Tensor]:
+        out = self._forward(x)
+        return out

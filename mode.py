@@ -7,6 +7,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 import pickle as pkl
+import random
 from torch.utils.data import DataLoader
 
 from model import SpeakerRecognition
@@ -19,10 +20,12 @@ def train(args) -> None:
     model = SpeakerRecognition(
         input_size=dataset.size(2),
         hidden_size=64,
-        num_layers=3
+        num_layers=3,
+        batch_size=len(train_loader),
+        normalize=True
     ).to(device)
 
-    criterion = nn.BCEWithLogitsLoss()
+    criterion = nn.BCELoss()
     pdist = nn.PairwiseDistance(p=2)
     optimizer = optim.SGD(model.parameters(), lr=1e-2, momentum=0.9)
     
@@ -36,14 +39,14 @@ def train(args) -> None:
     for epoch in range(epochs):
         for data in train_loader:
             data = data.to(device)
-            d_vectors = F.normalize(model(data), p=2, dim=2)
-            d_vectors_avg = torch.mean(d_vectors, dim=1)
-
-            # 1) cosine similarity loss
-            loss = 1.0 - F.cosine_similarity(d_vectors_avg, d_vectors_avg)
-            optimizer.zero_grad()
-            loss.backward()
-            optimizer.step()
+            contexts_avg = model(data)
+            if contexts_avg is not None:
+                loss = 1.0 - F.cosine_similarity(
+                    contexts_avg, model.context
+                )
+                optimizer.zero_grad()
+                loss.backward()
+                optimizer.step()
 
         if threshold is None:
             threshold = loss.item()
@@ -57,7 +60,7 @@ def train(args) -> None:
         print(f"running loss : {loss.item():.3f}\n")
 
     # object save
-    pkl.dump(d_vectors_avg, open(f'd_vectors_avg.pkl', 'wb+'))
+    pkl.dump(contexts_avg, open(f'contexts_avg.pkl', 'wb+'))
     torch.save(model.state_dict(), './model/pretrain.pt')
     return  
 
@@ -70,18 +73,18 @@ def validation(args) -> None:
     model = SpeakerRecognition(
         input_size=dataset.size(2),
         hidden_size=64,
-        num_layers=3
+        num_layers=3,
+        batch_size=1,
+        normalize=True
     ).to(device)
 
-    d_vectors_avg = pkl.load(open('contexts_avg.pkl', 'rb+'))
+    contexts_avg = pkl.load(open('contexts_avg.pkl', 'rb+'))
     model.load_state_dict(torch.load('./model/pretrain.pt'))
     model.eval()
     with torch.no_grad():
         for idx, data in enumerate(val_loader):
             data = data.to(device)
-            d_vectors = model(data)
-            comp = torch.mean(d_vectors, dim=1)
-
-            cosine_sim = F.cosine_similarity(d_vectors_avg, comp)
+            comp = model(data)
+            cosine_sim = F.cosine_similarity(contexts_avg, comp)
             print(dataset.file_names[idx] + ' : {:.4f}'.format(cosine_sim.item()))
     return

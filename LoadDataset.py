@@ -31,11 +31,11 @@ class Wav2Mel(nn.Module):
     - f_min : Minimum frequency
     '''
     def __init__(self,
-            sr: int,
             fft_window_ms: float,
             fft_hop_ms: float,
             f_min: float,
-            n_mels: int
+            n_mels: int,
+            sr: int=22050,
         ) -> None:
         super(Wav2Mel, self).__init__()
 
@@ -56,13 +56,13 @@ class Wav2Mel(nn.Module):
 
 class LoadDataset(nn.Module):
     '''
-    # feature extraction
+    ### feature extraction
     feature extraction using librosa
     '''    
     def __init__(self, 
             path: str,
             limit: int,
-            sr: int,
+            sr: int=22050,
         ) -> None:
         self.file_names = utils.get_file_names(path)
         wav2mel = Wav2Mel(
