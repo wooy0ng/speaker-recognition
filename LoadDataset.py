@@ -1,15 +1,17 @@
 from more_itertools import sample
 from torch.utils.data import DataLoader, Dataset
 from typing import *
+
 import librosa
 import torchaudio
 from torchaudio.sox_effects import apply_effects_tensor
 from torchaudio.transforms import MelSpectrogram
-
+from pathlib import Path
 import torch
 import torch.nn as nn
-import utils
+import os
 import numpy as np
+import random
 
 
 def crop_padding(data: np.ndarray, sr: int, point: int) -> np.ndarray:
@@ -31,11 +33,11 @@ class Wav2Mel(nn.Module):
     - f_min : Minimum frequency
     '''
     def __init__(self,
-            fft_window_ms: float,
-            fft_hop_ms: float,
-            f_min: float,
-            n_mels: int,
-            sr: int=22050,
+            sr: int=16000,
+            fft_window_ms: float=25.0,
+            fft_hop_ms: float=10.0,
+            f_min: float=50.0,
+            n_mels: int=40,
         ) -> None:
         super(Wav2Mel, self).__init__()
 
@@ -47,49 +49,73 @@ class Wav2Mel(nn.Module):
             n_mels=n_mels,
         )
 
-    def forward(self, wav: np.ndarray) -> torch.Tensor:
+    def forward(self, wav: torch.Tensor, sr: int) -> torch.Tensor:
         # wav = torch.tensor(librosa.util.normalize(wav), dtype=torch.float32)
-        wav = torch.tensor(wav, dtype=torch.float32)
-        mel_data = self.melspectrogram(wav)
+        mel_data = self.melspectrogram(wav).squeeze(0).T
         mel_data = torch.log(torch.clamp(mel_data, min=1e-9))
         return mel_data
 
-class LoadDataset(nn.Module):
+class MelDataset(Dataset):
     '''
     ### feature extraction
     feature extraction using librosa
     '''    
     def __init__(self, 
             path: str,
-            limit: int,
-            sr: int=22050,
         ) -> None:
-        self.file_names = utils.get_file_names(path)
-        wav2mel = Wav2Mel(
-            sr=sr,
-            fft_window_ms=25.,
-            fft_hop_ms=10.,
-            f_min=50.,
-            n_mels=40
-        )
-        result = []
-        for file in self.file_names:
-            data, sr = librosa.load(file,
-                sr=sr
-            )
-            point = sr * limit
-            data = crop_padding(data, sr, point)
-            mfcc_data = wav2mel(data)   # (feature, sequence)
-            result.append(mfcc_data)
-        self.dataset = torch.stack(result)  # (batch, feature, sequence)
-        self.dataset = torch.transpose(self.dataset, 1, 2)
+        
+        # setup mel function
+        wav2mel = Wav2Mel()
+
+        # preprocessing
+        self.speakers = set()
+        self.infos = []
+        
+        speaker_paths = [x for x in Path(path).iterdir() if x.is_dir()]
+        for speaker_path in speaker_paths:
+            audio_paths = librosa.util.find_files(speaker_path)
+            speaker_name = speaker_path.name
+            self.speakers.add(speaker_name)
+            for audio_path in audio_paths:
+                # wav2mel
+                wav, sr = torchaudio.load(audio_path)
+                mel_wav = wav2mel(wav, sr)
+                self.infos.append((speaker_name, mel_wav))
         return
         
     def __len__(self):
-        return len(self.dataset)
+        return len(self.infos)
 
-    def __getitem__(self, idx) -> torch.Tensor:
-        return self.dataset[idx]
+    def __getitem__(self, idx):
+        return self.infos[idx]
 
-    def size(self, dim) -> int:
-        return self.dataset.shape[dim]
+class GE2EDataset(Dataset):
+    def __init__(self,
+        speakers_info: dict,
+        n_utterances: int,
+        min_segment: int,
+    ) -> None:
+        self.min_segment = min_segment
+        self.n_utterances = n_utterances
+        self.infos = []
+
+        for uttrs_info in speakers_info.values():
+            infos = [
+                uttr_info['mel_tensor']
+                for uttr_info in uttrs_info
+                if uttr_info['seg_len'] > min_segment
+            ]
+            if len(infos) > n_utterances:
+                self.infos.append(infos)
+        return
+    
+    def __len__(self) -> int:
+        return len(self.infos)
+
+    def __getitem__(self, idx) -> List:
+        uttrs = random.sample(self.infos[idx], self.n_utterances)
+        lefts = [random.randint(0, len(uttr) - self.min_segment) for uttr in uttrs]
+        segments = [
+            uttr[left:left+self.min_segment, :] for uttr, left in zip(uttrs, lefts)
+        ]
+        return segments

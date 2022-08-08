@@ -6,77 +6,82 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-class CustomLSTM(nn.Module):
+class BasicLSTM(nn.Module):
     def __init__(self, 
             input_size : int,
             hidden_size : int,
             num_layers : int,
+            embedding_size: int,
         ) -> None:
-        super(CustomLSTM, self).__init__()
+        super(BasicLSTM, self).__init__()
         self.lstm = nn.LSTM(
             input_size=input_size,
             hidden_size=hidden_size,
             num_layers=num_layers,
             batch_first=True
         )
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        x = self.lstm(x)
-        return x
+        self.embedding = nn.Linear(hidden_size, embedding_size)
 
-class SpeakerRecognition(nn.Module):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        lstm_out, _ = self.lstm(x)
+        embed = self.embedding(lstm_out[:, -1, :])
+        out = embed.div(embed.norm(p=2, dim=-1, keepdim=True))
+        return out
+
+class AttentivePooledLSTMDvector(nn.Module):
+    """
+    ### attention pooling
+    - LSTM-based d-vector with attentive pooling.
+    """
+    def __init__(
+        self,
+        num_layers=3,
+        dim_input=40,
+        dim_cell=256,
+        dim_emb=256,
+        seg_len=160,
+    ):
+        super().__init__()
+        self.lstm = nn.LSTM(dim_input, dim_cell, num_layers, batch_first=True)
+        self.embedding = nn.Linear(dim_cell, dim_emb)
+        self.linear = nn.Linear(dim_emb, 1)
+        self.seg_len = seg_len
+
+    def forward(self, inputs: torch.Tensor) -> torch.Tensor:
+        """Forward a batch through network."""
+        lstm_outs, _ = self.lstm(inputs)  # (batch, seg_len, dim_cell)
+        embeds = torch.tanh(self.embedding(lstm_outs))  # (batch, seg_len, dim_emb)
+        attn_weights = F.softmax(self.linear(embeds), dim=1)
+        embeds = torch.sum(embeds * attn_weights, dim=1)
+        return embeds.div(embeds.norm(p=2, dim=-1, keepdim=True))
+
+class DvectorUsingLSTM(nn.Module):
     def __init__(self,
             input_size : int,
             hidden_size : int,
             num_layers : int,
-            batch_size: int,
-            **kwargs : Any
+            embedding_size: int,
         ) -> None:
-        super(SpeakerRecognition, self).__init__()
-        lstm_block = CustomLSTM
-        self.kwargs = kwargs
-        self.batch_size = batch_size
+        super(DvectorUsingLSTM, self).__init__()
+        # lstm_block = BasicLSTM
+        lstm_block = AttentivePooledLSTMDvector
         self.contexts = []
 
-        self.lstm = lstm_block(
-            input_size=input_size,
-            hidden_size=hidden_size,
-            num_layers=num_layers
-        )
-        self.clf = nn.Sequential(
-            nn.Linear(hidden_size, hidden_size*4, bias=True),
-            nn.ReLU(inplace=True),
-            nn.Linear(hidden_size*4 ,hidden_size, bias=True),
-            nn.ReLU(inplace=True),
-            nn.Linear(hidden_size, 1, bias=True),
-            nn.Sigmoid()
-        )
-        self.init_weights()
-
-    def init_weights(self) -> None:
-        for name, param in self.named_parameters():
-            nn.init.normal_(param)
-        return
+        if lstm_block.__name__ == 'BasicLSTM':
+            self.lstm = lstm_block(
+                input_size=input_size,
+                hidden_size=hidden_size,
+                num_layers=num_layers,
+                embedding_size=embedding_size
+            )
+        else:
+            self.lstm = lstm_block()
 
     def _forward(self, x) -> Optional[torch.Tensor]:
         # d-vector
-        d_vectors, (h, c) = self.lstm(x)
-        if 'normalize' in self.kwargs.keys():
-            if self.kwargs['normalize'] is True:
-                d_vectors = F.normalize(d_vectors, p=2, dim=2)
-        # d_vectors_avg = torch.mean(d_vectors, dim=1)
-        # clf = self.clf(d_vectors_avg)
-        self.context = d_vectors[:, -1, :]
-        self.contexts.append(self.context)
-        if len(self.contexts) < self.batch_size:
-            return
-        contexts = torch.stack(self.contexts)
-        self.contexts = []
-        if self.batch_size > 1:
-            out = contexts.mean(dim=0)
-        else:
-            out = contexts.squeeze(0)
-        return out
+        dvector = self.lstm(x)
+        return dvector
 
-    def forward(self, x) -> Optional[torch.Tensor]:
+    def forward(self, x):
         out = self._forward(x)
         return out
