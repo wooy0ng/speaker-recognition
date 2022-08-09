@@ -1,13 +1,16 @@
 from LoadDataset import *
 from torch.utils.data import DataLoader
 from torch.nn.utils.rnn import pad_sequence
+from sklearn.model_selection import train_test_split
 
-def preprocessing(args, mode: str):
+def preprocessing(args, mode: str, split: bool):
     '''### Return GE2E DataLoader'''
     if mode == 'train':
         path = args.train_path
-    else:
+    elif mode == 'validation':
         path = args.val_path
+    else:
+        path = args.score_path
     mel_dataset = MelDataset(path)
     mel_dataloader = DataLoader(mel_dataset, batch_size=1)
 
@@ -26,9 +29,17 @@ def preprocessing(args, mode: str):
         n_utterances=args.n_utterances, 
         min_segment=args.min_segment,
     )
-    ge2e_dataloader = DataLoader(GE2E_dataset, batch_size=args.n_speakers)
-    ge2e_dataloader = collate_batch(ge2e_dataloader)
-    return ge2e_dataloader
+    if split is True:
+        train_set, valid_set = train_test_split(GE2E_dataset, test_size=0.5, random_state=42)
+    else:
+        train_set = GE2E_dataset
+        valid_set = None
+    train_dataloader = collate_batch(DataLoader(train_set, batch_size=args.n_speakers))
+    val_dataloader = None
+
+    if valid_set is not None:
+        val_dataloader = collate_batch(DataLoader(valid_set, batch_size=args.n_speakers))
+    return train_dataloader, val_dataloader
 
 def collate_batch(batch):
     """

@@ -1,5 +1,6 @@
 import numpy as np
 import pandas as pd
+import math
 from typing import *
 
 import torch
@@ -61,8 +62,11 @@ class DvectorUsingLSTM(nn.Module):
             hidden_size : int,
             num_layers : int,
             embedding_size: int,
+            seg_len: int,
         ) -> None:
         super(DvectorUsingLSTM, self).__init__()
+        self.seg_len = seg_len
+
         # lstm_block = BasicLSTM
         lstm_block = AttentivePooledLSTMDvector
         self.contexts = []
@@ -85,3 +89,19 @@ class DvectorUsingLSTM(nn.Module):
     def forward(self, x):
         out = self._forward(x)
         return out
+
+    def embed_utterance(self, utterance: torch.Tensor) -> torch.Tensor:
+        if utterance.size(0) <= self.seg_len:
+            embed = self.forward(utterance.unsqueeze(0)).squeeze(0)
+        else:
+            hop_len = self.seg_len // 2
+            tgt_len = math.ceil(utterance.size(0) / hop_len) * hop_len
+            zero_padding = torch.zeros(tgt_len - utterance.size(0), utterance.size(1))
+            padded = torch.cat([utterance, zero_padding.to(utterance.device)])
+
+            segments = padded.unfold(0, self.seg_len, self.seg_len // 2)
+            segments = segments.transpose(1, 2)
+            embeds = self.forward(segments)
+            embed = embeds.mean(dim=0)
+            embed = embed.div(embed.norm(p=2, dim=-1, keepdim=True))
+        return embed
