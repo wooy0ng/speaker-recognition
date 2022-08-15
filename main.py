@@ -4,8 +4,8 @@ import mode
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
 
-    parser.add_argument('--mode', required=False, default='train',
-        help='--mode [train | validation]'
+    parser.add_argument('--mode', required=False, default='validation',
+        help='--mode [train | train_after | validation]'
     )
     parser.add_argument('--train_path', required=False, default='../voxceleb_dataset/dev')
     parser.add_argument('--val_path', required=False, default='../voxceleb_dataset/test')
@@ -21,6 +21,8 @@ if __name__ == "__main__":
 
     if args.mode == 'train':
         mode.train(args)
+    elif args.mode == 'train_after':
+        mode.train_after(args)
     elif args.mode == 'validation':
         mode.validation(args)
     

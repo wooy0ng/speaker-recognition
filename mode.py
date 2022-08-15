@@ -14,7 +14,10 @@ from torch.utils.data import DataLoader
 from ge2eloss import GE2ELoss
 
 from model import DvectorUsingLSTM
+from model_after import *
 import time
+
+from utils import *
 
 def infinite_iterator(dataloader):
     """Infinitely yield a batch of data."""
@@ -101,19 +104,78 @@ def train(args) -> None:
                 )
             except ZeroDivisionError:
                 print("validation avg loss : -")
-        if step % 1000 == 0:
+        if step % 10000 == 0:
             save_path = checkpoint_path / f'model-step{step}.pt'
             dvector.cpu()
             dvector.save(str(save_path))
             dvector.to(device)
     return  
 
+def train_after(args) -> None:
+    dvector = torch.jit.load('./model/model-step250000.pt')
+
+    wav, sample_rate = torchaudio.load('../voxceleb_dataset/score/id10022_00002.wav')
+    wav2mel = Wav2Mel()
+    mel_wav = wav2mel(wav, sample_rate)
+    
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    key_size = 128
+    memorized_model = MemorizedModel(256, key_size).to(device)
+    memorized_model = torch.jit.script(memorized_model)
+
+    optimizer = optim.Adam(memorized_model.parameters(), lr=1e-3)
+    criterion = nn.MSELoss()
+
+    epochs = 5
+    for epoch in range(epochs):
+        embeded_vector = dvector.embed_utterance(mel_wav).to(device)
+        key = make_random_key(key_size).to(device)
+        
+        output = memorized_model(embeded_vector)
+        loss = criterion(key, output)
+        
+        optimizer.zero_grad()
+        loss.backward()
+        optimizer.step()
+
+        print(f"{epoch+1} epoch loss : {loss.item():.3f}")
+    memorized_model.cpu()
+    memorized_model.save('./memorized_model.pt')
+    memorized_model.to(device)
+
+    return
+
 def validation(args) -> None:
+    dvector = torch.jit.load('./model/model-step250000.pt')
+
+    wav1, sample_rate1 = torchaudio.load('../voxceleb_dataset/score/id10022_00002.wav') # true
+    wav2, sample_rate2 = torchaudio.load('../voxceleb_dataset/score/id10004_00001.wav') # false
+    wav2mel = Wav2Mel()
     
+    mel_wav1 = wav2mel(wav1, sample_rate1)
+    mel_wav2 = wav2mel(wav2, sample_rate2)
+
+    key_size = 128
+    
+    key = make_random_key(key_size)
+    dvector = torch.jit.load('./model/model-step250000.pt')
+    memorized_model = torch.jit.load('./memorized_model.pt')
+    
+    with torch.no_grad():
+        embed_vector1 = dvector.embed_utterance(mel_wav1)
+        embed_vector2 = dvector.embed_utterance(mel_wav2)
+        
+        # print(embed_vector1)
+        # print(embed_vector2)
+        output1 = memorized_model(embed_vector1)
+        output2 = memorized_model(embed_vector2)
+
+        t1 = get_variance(key, output1)
+        t2 = get_variance(key, output2)
+        print(bit_to_hex(key))
+        print(bit_to_hex(torch.where(output1 > 0.5, 1, 0)))
+        print(bit_to_hex(torch.where(output2 > 0.5, 1, 0)))
     return
 
-def score(args) -> None:
-    '''calculate equal error rate'''
-    
-
-    return
+def get_variance(a, b):
+    return torch.mean((a - b) ** 2, dim=0)
