@@ -31,7 +31,7 @@ class BasicLSTM(nn.Module):
 
 class AttentivePooledLSTMDvector(nn.Module):
     """
-    ### attention pooling
+    # attention pooling
     - LSTM-based d-vector with attentive pooling.
     """
     def __init__(

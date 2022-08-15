@@ -2,29 +2,43 @@ from LoadDataset import *
 from torch.utils.data import DataLoader
 from torch.nn.utils.rnn import pad_sequence
 from sklearn.model_selection import train_test_split
+from uuid import uuid4
+import json
 
 def preprocessing(args, mode: str, split: bool):
-    '''### Return GE2E DataLoader'''
+    ''' Return GE2E DataLoader(dataset) '''
     if mode == 'train':
         path = args.train_path
     elif mode == 'validation':
         path = args.val_path
     else:
         path = args.score_path
-    mel_dataset = MelDataset(path)
-    mel_dataloader = DataLoader(mel_dataset, batch_size=1)
+    
+    preprocessing_path = Path(args.preprocessing_path)
+    if args.is_preprocessed is False:
+        mel_dataset = MelDataset(path)
+        mel_dataloader = DataLoader(mel_dataset, batch_size=1)
 
-    speakers_info = {speaker: [] for speaker in mel_dataset.speakers}
-    for speaker, mel_wav in mel_dataloader:
-        speaker = speaker[0]
-        mel_wav = mel_wav.squeeze(0)
-        speakers_info[speaker].append(
-            {
-                'mel_tensor': mel_wav,
-                'seg_len': len(mel_wav)
-            }
-        )
+        speakers_info = {speaker: [] for speaker in mel_dataset.speakers}
+        for speaker, mel_wav in mel_dataloader:
+            speaker = speaker[0]
+            mel_wav = mel_wav.squeeze(0)
+            random_path = preprocessing_path / f'uttrance-{uuid4().hex}.pt'
+            torch.save(mel_wav, random_path)
+            speakers_info[speaker].append(
+                {
+                    'feature_path': random_path.name,
+                    'seg_len': len(mel_wav)
+                }
+            )
+        with open(preprocessing_path / "metadata.json", 'w') as f:
+            json.dump(speakers_info, f, indent=2)
+    
+    with open(preprocessing_path / "metadata.json", 'r') as f:
+        speakers_info = json.load(f)
+
     GE2E_dataset = GE2EDataset(
+        preprocessing_path=preprocessing_path,
         speakers_info=speakers_info, 
         n_utterances=args.n_utterances, 
         min_segment=args.min_segment,

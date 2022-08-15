@@ -23,13 +23,19 @@ def infinite_iterator(dataloader):
             yield batch
 
 def train(args) -> None:
+    preprocessing_path = Path(args.preprocessing_path)
+    preprocessing_path.mkdir(parents=True, exist_ok=True)
     train_loader, val_loader = preprocessing(args, 'train', split=args.train_test_split)
+    
     train_iter = infinite_iterator(train_loader)
     val_iter = None
     if val_loader is not None:
         val_iter = infinite_iterator(val_loader)
     
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
+    checkpoint_path = Path(args.model_path)
+
     dvector = DvectorUsingLSTM(
         input_size=40,
         hidden_size=256,
@@ -37,6 +43,8 @@ def train(args) -> None:
         embedding_size=256,
         seg_len=160
     ).to(device)
+    dvector = torch.jit.script(dvector)
+
     criterion = GE2ELoss().to(device)
     optimizer = optim.SGD(list(dvector.parameters())+list(criterion.parameters()), lr=0.01)
     scheduler = optim.lr_scheduler.StepLR(
@@ -93,6 +101,11 @@ def train(args) -> None:
                 )
             except ZeroDivisionError:
                 print("validation avg loss : -")
+        if step % 1000 == 0:
+            save_path = checkpoint_path / f'model-step{step}.pt'
+            dvector.cpu()
+            dvector.save(str(save_path))
+            dvector.to(device)
     return  
 
 def validation(args) -> None:

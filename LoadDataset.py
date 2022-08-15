@@ -91,29 +91,35 @@ class MelDataset(Dataset):
 
 class GE2EDataset(Dataset):
     def __init__(self,
+        preprocessing_path: Path,
         speakers_info: dict,
         n_utterances: int,
         min_segment: int,
     ) -> None:
+        self.preprocessing_path = preprocessing_path
         self.min_segment = min_segment
         self.n_utterances = n_utterances
         self.infos = []
 
         for uttrs_info in speakers_info.values():
-            infos = [
-                uttr_info['mel_tensor']
+            feature_paths = [
+                uttr_info['feature_path']
                 for uttr_info in uttrs_info
                 if uttr_info['seg_len'] > min_segment
             ]
-            if len(infos) > n_utterances:
-                self.infos.append(infos)
+            if len(feature_paths) > n_utterances:
+                self.infos.append(feature_paths)
         return
     
     def __len__(self) -> int:
         return len(self.infos)
 
     def __getitem__(self, idx) -> List:
-        uttrs = random.sample(self.infos[idx], self.n_utterances)
+        random_feature_paths = random.sample(self.infos[idx], self.n_utterances)
+        uttrs = [
+            torch.load(self.preprocessing_path / feature_path) 
+            for feature_path in random_feature_paths
+        ]
         lefts = [random.randint(0, len(uttr) - self.min_segment) for uttr in uttrs]
         segments = [
             uttr[left:left+self.min_segment, :] for uttr, left in zip(uttrs, lefts)

@@ -9,7 +9,9 @@ if __name__ == "__main__":
     )
     parser.add_argument('--train_path', required=False, default='../voxceleb_dataset/dev')
     parser.add_argument('--val_path', required=False, default='../voxceleb_dataset/test')
-    parser.add_argument('--score_path', required=False, default='../voxceleb_dataset/score')
+    parser.add_argument('--preprocessing_path', required=False, default='./model/dataset')
+    parser.add_argument('--model_path', required=False, default='./model')
+    parser.add_argument('--is_preprocessed', required=False, default=True)
     parser.add_argument('--n_utterances', required=False, default=10)
     parser.add_argument('--min_segment', required=False, default=160)
     parser.add_argument('--n_speakers', required=False, default=64)
@@ -21,6 +23,4 @@ if __name__ == "__main__":
         mode.train(args)
     elif args.mode == 'validation':
         mode.validation(args)
-    elif args.mode == 'score':
-        mode.score(args)
-
+    
