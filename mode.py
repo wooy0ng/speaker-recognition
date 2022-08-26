@@ -11,7 +11,10 @@ import torch.optim as optim
 import pickle as pkl
 import random
 from torch.utils.data import DataLoader
+from sklearn.manifold import TSNE
 from ge2eloss import GE2ELoss
+import seaborn as sns
+import matplotlib.pyplot as plt
 
 from model import DvectorUsingLSTM
 from model_after import *
@@ -175,6 +178,31 @@ def validation(args) -> None:
         print(bit_to_hex(key))
         print(bit_to_hex(torch.where(output1 > 0.5, 1, 0)))
         print(bit_to_hex(torch.where(output2 > 0.5, 1, 0)))
+    return
+
+def visualization(args) -> None:
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    dvector = torch.jit.load('./model/model-step250000.pt').eval().to(device)
+    mel_dataset = MelDataset('../voxceleb_dataset/test')
+
+    embed_dataset = []
+    for speaker_name, wav in mel_dataset.infos[:50]:
+        with torch.no_grad():
+            v = dvector.embed_utterance(wav.to(device))
+            v = v.detach().cpu().numpy()
+        embed_dataset.append(v)
+    
+    tsne = TSNE(n_components=2, verbose=1, perplexity=40, n_iter=300)
+    transformed = tsne.fit_transform(embed_dataset)
+
+    plt.figure()
+    sns.scatterplot(
+        x=transformed[:, 0],
+        y=transformed[:, 1]
+    )
+    plt.tight_layout()
+    plt.savefig('./test.png')
+    
     return
 
 def get_variance(a, b):
