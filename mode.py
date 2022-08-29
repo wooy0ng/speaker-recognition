@@ -1,4 +1,5 @@
 from itertools import count
+import json
 import numpy as np
 import pandas as pd
 from LoadDataset import *
@@ -21,6 +22,7 @@ from model_after import *
 import time
 
 from utils import *
+from uuid import uuid4
 
 def infinite_iterator(dataloader):
     """Infinitely yield a batch of data."""
@@ -107,7 +109,7 @@ def train(args) -> None:
                 )
             except ZeroDivisionError:
                 print("validation avg loss : -")
-        if step % 10000 == 0:
+        if step % 25000 == 0:
             save_path = checkpoint_path / f'model-step{step}.pt'
             dvector.cpu()
             dvector.save(str(save_path))
@@ -183,22 +185,69 @@ def validation(args) -> None:
 def visualization(args) -> None:
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     dvector = torch.jit.load('./model/model-step250000.pt').eval().to(device)
-    mel_dataset = MelDataset('../voxceleb_dataset/test')
-
-    embed_dataset = []
-    for speaker_name, wav in mel_dataset.infos[:50]:
-        with torch.no_grad():
-            v = dvector.embed_utterance(wav.to(device))
-            v = v.detach().cpu().numpy()
-        embed_dataset.append(v)
     
+    preprocessing_path = Path(args.preprocessing_path)
+    if args.is_preprocessed is False:
+        mel_dataset = MelDataset('../voxceleb_dataset/test')    
+        mel_dataloader = DataLoader(mel_dataset, batch_size=1)
+        speakers_info = {speaker: [] for speaker in mel_dataset.speakers}
+        for speaker, mel_wav in mel_dataloader:
+            speaker = speaker[0]
+            mel_wav = mel_wav.squeeze(0)
+            random_path = preprocessing_path / f'utterance-{uuid4().hex}.pt'
+            torch.save(mel_wav, random_path)
+            speakers_info[speaker].append(
+                {
+                    'feature_path': random_path.name,
+                    'seg_len': len(mel_wav)
+                }
+            )
+        with open(preprocessing_path / "metadata.json", 'w') as f:
+            json.dump(speakers_info, f, indent=2)
+    with open(preprocessing_path / "metadata.json", 'r') as f:
+        speakers_info = json.load(f)
+    
+    min_segment = args.min_segment
+    n_utterances = args.n_utterances
+    infos = []
+    for uttrs_info in speakers_info.values():
+        feature_paths = [
+            uttr_info['feature_path']
+            for uttr_info in uttrs_info
+            if uttr_info['seg_len'] > min_segment
+        ]
+        if len(feature_paths) > n_utterances:
+            infos.append(feature_paths)
+
+    speakers_name = list(speakers_info.keys())
+    embed_dataset = []
+    names = []
+    speaker_cnt = 0
+    with torch.no_grad():
+        for speaker_name, info in zip(speakers_name, infos):
+            if speaker_cnt < 5:
+                speaker_cnt += 1
+            else:
+                break
+            random.shuffle(info)
+            for feature_path in info[:30]:
+                wav = torch.load(preprocessing_path / feature_path)
+                v = dvector.embed_utterance(wav.to(device))
+                v = v.detach().cpu().numpy()
+                embed_dataset.append(v)
+                names.append(speaker_name)
+            
+            
     tsne = TSNE(n_components=2, verbose=1, perplexity=40, n_iter=300)
     transformed = tsne.fit_transform(embed_dataset)
 
     plt.figure()
     sns.scatterplot(
         x=transformed[:, 0],
-        y=transformed[:, 1]
+        y=transformed[:, 1],
+        hue=names,
+        palette=sns.color_palette(n_colors=speaker_cnt),
+        legend='full'
     )
     plt.tight_layout()
     plt.savefig('./test.png')

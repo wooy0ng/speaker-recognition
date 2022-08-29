@@ -4,14 +4,17 @@ import mode
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
 
-    parser.add_argument('--mode', required=False, default='visualization',
+    parser.add_argument('--mode', required=False, default='train',
         help='--mode [train | train_after | validation | visualization]'
     )
-    parser.add_argument('--train_path', required=False, default='../voxceleb_dataset/dev')
+    parser.add_argument('--train_path', required=False, default='../voxceleb_dataset/train')
     parser.add_argument('--val_path', required=False, default='../voxceleb_dataset/test')
-    parser.add_argument('--preprocessing_path', required=False, default='./model/dataset')
+    parser.add_argument('--preprocessing_path', required=False, default='./model/train_dataset',
+        help='--preprocessing_path [train_dataset | test_dataset]'
+    )
     parser.add_argument('--model_path', required=False, default='./model')
     parser.add_argument('--is_preprocessed', required=False, default=True)
+
     parser.add_argument('--n_utterances', required=False, default=10)
     parser.add_argument('--min_segment', required=False, default=160)
     parser.add_argument('--n_speakers', required=False, default=64)
