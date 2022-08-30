@@ -4,16 +4,18 @@ import mode
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
 
-    parser.add_argument('--mode', required=False, default='train',
-        help='--mode [train | train_after | validation | visualization]'
+    parser.add_argument('--mode', required=False, default='preprocess',
+        help='--mode [preprocess | train | train_after | validation | visualization]'
     )
-    parser.add_argument('--train_path', required=False, default='../voxceleb_dataset/train')
-    parser.add_argument('--val_path', required=False, default='../voxceleb_dataset/test')
+    
     parser.add_argument('--preprocessing_path', required=False, default='./model/train_dataset',
         help='--preprocessing_path [train_dataset | test_dataset]'
     )
+    parser.add_argument('--train_path', required=False, default='../voxceleb_dataset/train')
+    parser.add_argument('--val_path', required=False, default='../voxceleb_dataset/test')
+
     parser.add_argument('--model_path', required=False, default='./model')
-    parser.add_argument('--is_preprocessed', required=False, default=True)
+    parser.add_argument('--is_preprocessed', required=False, default=False)
 
     parser.add_argument('--n_utterances', required=False, default=10)
     parser.add_argument('--min_segment', required=False, default=160)
@@ -21,8 +23,9 @@ if __name__ == "__main__":
     parser.add_argument('--train_test_split', required=False, default=False)
     
     args = parser.parse_args()
-
-    if args.mode == 'train':
+    if args.mode == 'preprocess':
+        mode.preprocess(args)
+    elif args.mode == 'train':
         mode.train(args)
     elif args.mode == 'train_after':
         mode.train_after(args)

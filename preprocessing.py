@@ -8,8 +8,10 @@ import json
 from tqdm import tqdm
 
 def preprocessing(args, mode: str, split: bool):
-    ''' Return GE2E DataLoader(dataset) '''
-    if mode == 'train':
+    ''' Return GE2E DataLoader '''
+    if mode == 'preprocess':
+        path = args.preprocessing_path
+    elif mode == 'train':
         path = args.train_path
     elif mode == 'validation':
         path = args.val_path
@@ -35,9 +37,12 @@ def preprocessing(args, mode: str, split: bool):
             )
         with open(preprocessing_path / "metadata.json", 'w') as f:
             json.dump(speakers_info, f, indent=2)
-    
-    with open(preprocessing_path / "metadata.json", 'r') as f:
-        speakers_info = json.load(f)
+    try:
+        with open(preprocessing_path / "metadata.json", 'r') as f:
+            speakers_info = json.load(f)
+    except BaseException as e:
+        with open(Path(path) / "metadata.json", 'r') as f:
+            speakers_info = json.load(f)
 
     GE2E_dataset = GE2EDataset(
         preprocessing_path=preprocessing_path,

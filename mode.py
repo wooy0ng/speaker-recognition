@@ -30,6 +30,15 @@ def infinite_iterator(dataloader):
         for batch in iter(dataloader):
             yield batch
 
+def preprocess(args) -> None:
+    '''
+    this method is only available on Linux/Unix
+    '''
+    preprocessing_path = Path(args.preprocessing_path)
+    preprocessing_path.mkdir(parents=True, exist_ok=True)
+    train_loader, val_loader = preprocessing(args, 'preprocess', split=args.train_test_split)
+    return
+
 def train(args) -> None:
     preprocessing_path = Path(args.preprocessing_path)
     preprocessing_path.mkdir(parents=True, exist_ok=True)
@@ -70,6 +79,8 @@ def train(args) -> None:
         start = time.time()
         batch = next(train_iter).to(device)
         output = dvector(batch)
+        
+        # error : shape '[64, 10, -1]' is invalid for input of size 16384
         output = output.view(n_speakers, n_utterances, -1)
         loss = criterion(output)
 

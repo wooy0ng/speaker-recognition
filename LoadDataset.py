@@ -38,9 +38,15 @@ class Wav2Mel(nn.Module):
             fft_hop_ms: float=10.0,
             f_min: float=50.0,
             n_mels: int=40,
+            
+            # sox effects
+            norm_db: float=-3.0,
+            sil_threshold: float=1.0,
+            sil_duration: float=0.1,
         ) -> None:
         super(Wav2Mel, self).__init__()
 
+        self.sox_effects = SoxEffects(sr, norm_db, sil_threshold, sil_duration)
         self.melspectrogram = MelSpectrogram(
             sample_rate=sr,
             n_fft=int(sr * fft_window_ms / 1000),
@@ -50,6 +56,8 @@ class Wav2Mel(nn.Module):
         )
 
     def forward(self, wav: torch.Tensor, sr: int) -> torch.Tensor:
+        wav = self.sox_effects(wav, sr)
+
         # wav = torch.tensor(librosa.util.normalize(wav), dtype=torch.float32)
         mel_data = self.melspectrogram(wav).squeeze(0).T
         mel_data = torch.log(torch.clamp(mel_data, min=1e-9))
@@ -126,3 +134,31 @@ class GE2EDataset(Dataset):
             uttr[left:left+self.min_segment, :] for uttr, left in zip(uttrs, lefts)
         ]
         return segments
+
+class SoxEffects(nn.Module):
+    def __init__(
+        self,
+        sample_rate: int,
+        norm_db: float,
+        sil_threshold: float,
+        sil_duration: float
+    ):
+        super().__init__()
+        self.effects = [
+            ["channels", '1'],
+            ["rate", f"{sample_rate}"],
+            ["norm", f"{norm_db}"],
+            [
+                "silence",
+                "1",
+                f"{sil_duration}",
+                f"{sil_threshold}%",
+                "-1",
+                f"{sil_duration}",
+                f"{sil_threshold}"
+            ]   # -- remove silence throughout the file
+        ]
+    
+    def forward(self, wav: torch.Tensor, sample_rate: int) -> torch.Tensor:
+        wav, _ = apply_effects_tensor(wav, sample_rate, self.effects)
+        return wav
