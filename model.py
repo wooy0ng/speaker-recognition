@@ -81,7 +81,7 @@ class DvectorUsingLSTM(nn.Module):
         else:
             self.lstm = lstm_block()
 
-    def _forward(self, x) -> Optional[torch.Tensor]:
+    def _forward(self, x) -> torch.Tensor:
         # d-vector
         dvector = self.lstm(x)
         return dvector
@@ -90,7 +90,11 @@ class DvectorUsingLSTM(nn.Module):
         out = self._forward(x)
         return out
 
+    @torch.jit.export
     def embed_utterance(self, utterance: torch.Tensor) -> torch.Tensor:
+        if utterance.ndim == 3:
+            utterance = utterance.squeeze(0)
+
         if utterance.size(0) <= self.seg_len:
             embed = self.forward(utterance.unsqueeze(0)).squeeze(0)
         else:

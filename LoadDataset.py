@@ -12,7 +12,7 @@ import torch.nn as nn
 import os
 import numpy as np
 import random
-
+from tqdm import tqdm
 
 def crop_padding(data: np.ndarray, sr: int, point: int) -> np.ndarray:
     if data.shape[0] < point:
@@ -72,7 +72,7 @@ class MelDataset(Dataset):
         self.infos = []
         
         speaker_paths = [x for x in Path(path).iterdir() if x.is_dir()]
-        for speaker_path in speaker_paths:
+        for speaker_path in tqdm(speaker_paths, 'get mel dataset'):
             audio_paths = librosa.util.find_files(speaker_path)
             speaker_name = speaker_path.name
             self.speakers.add(speaker_name)
@@ -100,8 +100,9 @@ class GE2EDataset(Dataset):
         self.min_segment = min_segment
         self.n_utterances = n_utterances
         self.infos = []
+        
 
-        for uttrs_info in speakers_info.values():
+        for uttrs_info in tqdm(speakers_info.values(), 'get ge2e dataset'):
             feature_paths = [
                 uttr_info['feature_path']
                 for uttr_info in uttrs_info

@@ -5,6 +5,8 @@ from sklearn.model_selection import train_test_split
 from uuid import uuid4
 import json
 
+from tqdm import tqdm
+
 def preprocessing(args, mode: str, split: bool):
     ''' Return GE2E DataLoader(dataset) '''
     if mode == 'train':
@@ -48,9 +50,10 @@ def preprocessing(args, mode: str, split: bool):
     else:
         train_set = GE2E_dataset
         valid_set = None
+    print("[+] collate batch...", end=' ')
     train_dataloader = collate_batch(DataLoader(train_set, batch_size=args.n_speakers))
     val_dataloader = None
-
+    print("complete")
     if valid_set is not None:
         val_dataloader = collate_batch(DataLoader(valid_set, batch_size=args.n_speakers))
     return train_dataloader, val_dataloader
