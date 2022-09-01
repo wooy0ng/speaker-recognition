@@ -8,7 +8,7 @@ if __name__ == "__main__":
         help='--mode [preprocess | train | train_after | validation | visualization]'
     )
     
-    parser.add_argument('--preprocessing_path', required=False, default='./model/train_dataset',
+    parser.add_argument('--preprocessing_path', required=False, default='/mnt/e/project/ver1.1/model/train_dataset',
         help='--preprocessing_path [train_dataset | test_dataset]'
     )
     parser.add_argument('--train_path', required=False, default='../voxceleb_dataset/train')

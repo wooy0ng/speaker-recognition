@@ -10,7 +10,7 @@ from tqdm import tqdm
 def preprocessing(args, mode: str, split: bool):
     ''' Return GE2E DataLoader '''
     if mode == 'preprocess':
-        path = args.preprocessing_path
+        path = args.train_path
     elif mode == 'train':
         path = args.train_path
     elif mode == 'validation':
@@ -24,7 +24,7 @@ def preprocessing(args, mode: str, split: bool):
         mel_dataloader = DataLoader(mel_dataset, batch_size=1)
 
         speakers_info = {speaker: [] for speaker in mel_dataset.speakers}
-        for speaker, mel_wav in mel_dataloader:
+        for speaker, mel_wav in tqdm(mel_dataloader):
             speaker = speaker[0]
             mel_wav = mel_wav.squeeze(0)
             random_path = preprocessing_path / f'uttrance-{uuid4().hex}.pt'
