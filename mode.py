@@ -236,7 +236,7 @@ def visualization(args) -> None:
     speaker_cnt = 0
     with torch.no_grad():
         for speaker_name, info in zip(speakers_name, infos):
-            if speaker_cnt < 5:
+            if speaker_cnt < 15:
                 speaker_cnt += 1
             else:
                 break
