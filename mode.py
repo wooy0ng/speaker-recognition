@@ -59,6 +59,18 @@ def train(args) -> None:
         drop_last=True
     )
     train_iter = infinite_iterator(train_loader)
+
+    if valid_set is not None:
+        valid_loader = InfiniteDataLoader(
+            train_set,
+            batch_size=args.n_speakers,
+            num_workers=cpu_count(),
+            collate_fn=collate_batch,
+            drop_last=True
+        )
+        valid_iter = infinite_iterator(valid_loader)
+    else:
+        valid_iter = None
     print("[OK]")
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -115,9 +127,9 @@ def train(args) -> None:
         scheduler.step()
         train_running_loss.append(loss.item())
         if step % 50 == 0:
-            if val_iter is not None:
+            if valid_iter is not None:
                 for _ in range(50):
-                    batch = next(val_iter).to(device)
+                    batch = next(valid_iter).to(device)
                     with torch.no_grad():
                         output = dvector(batch).view(n_speakers, n_utterances, -1)
                         loss = criterion(output)
