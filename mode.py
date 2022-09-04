@@ -4,6 +4,7 @@ import numpy as np
 import pandas as pd
 from LoadDataset import *
 from preprocessing import preprocessing
+from infinite_dataloader import *
 
 import torch
 import torch.nn as nn
@@ -23,6 +24,7 @@ import time
 
 from utils import *
 from uuid import uuid4
+from multiprocessing import cpu_count
 
 def infinite_iterator(dataloader):
     """Infinitely yield a batch of data."""
@@ -36,19 +38,29 @@ def preprocess(args) -> None:
     '''
     preprocessing_path = Path(args.preprocessing_path)
     preprocessing_path.mkdir(parents=True, exist_ok=True)
-    train_loader, val_loader = preprocessing(args, 'preprocess', split=args.train_test_split)
+    train_set, valid_set = preprocessing(args, 'preprocess', split=args.train_test_split)
     return
 
 def train(args) -> None:
     preprocessing_path = Path(args.preprocessing_path)
     preprocessing_path.mkdir(parents=True, exist_ok=True)
-    train_loader, val_loader = preprocessing(args, 'train', split=args.train_test_split)
+    train_set, valid_set = preprocessing(args, 'train', split=args.train_test_split)
+
+    assert len(train_set) >= args.n_speakers
+    print(f"[+] {len(train_set)} speakers for training...")
     
+    # infinite DataLoader
+    print("[+] Set infinite DataLoader...", end=' ')
+    train_loader = InfiniteDataLoader(
+        train_set,
+        batch_size=args.n_speakers,
+        num_workers=cpu_count(),
+        collate_fn=collate_batch,
+        drop_last=True
+    )
     train_iter = infinite_iterator(train_loader)
-    val_iter = None
-    if val_loader is not None:
-        val_iter = infinite_iterator(val_loader)
-    
+    print("[OK]")
+
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
     checkpoint_path = Path(args.model_path)
@@ -63,6 +75,7 @@ def train(args) -> None:
     dvector = torch.jit.script(dvector)
 
     criterion = GE2ELoss().to(device)
+
     optimizer = optim.SGD(list(dvector.parameters())+list(criterion.parameters()), lr=0.01)
     scheduler = optim.lr_scheduler.StepLR(
         optimizer=optimizer,
@@ -125,6 +138,7 @@ def train(args) -> None:
             dvector.cpu()
             dvector.save(str(save_path))
             dvector.to(device)
+
     return  
 
 def train_after(args) -> None:

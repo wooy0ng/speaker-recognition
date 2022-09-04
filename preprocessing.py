@@ -55,18 +55,4 @@ def preprocessing(args, mode: str, split: bool):
     else:
         train_set = GE2E_dataset
         valid_set = None
-    print("[+] collate batch...", end=' ')
-    train_dataloader = collate_batch(DataLoader(train_set, batch_size=args.n_speakers))
-    val_dataloader = None
-    print("complete")
-    if valid_set is not None:
-        val_dataloader = collate_batch(DataLoader(valid_set, batch_size=args.n_speakers))
-    return train_dataloader, val_dataloader
-
-def collate_batch(batch):
-    """
-    Collate a whole batch of utterances.
-    return size : (n_utterances, batch, seg_len, n_mels)
-    """
-    flatten = [u for s in batch for u in s]
-    return pad_sequence(flatten, batch_first=True, padding_value=0)
+    return train_set, valid_set

@@ -4,10 +4,10 @@ import mode
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
 
-    parser.add_argument('--mode', required=False, default='visualization',
+    parser.add_argument('--mode', required=False, default='train',
         help='--mode [preprocess | train | train_after | validation | visualization]'
     )
-    
+        
     # ./model/train_dataset
     # /mnt/e/project/ver1.1/model/train_dataset
     parser.add_argument('--preprocessing_path', required=False, default='./model/train_dataset',

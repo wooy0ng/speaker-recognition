@@ -14,6 +14,8 @@ import numpy as np
 import random
 from tqdm import tqdm
 
+from torch.nn.utils.rnn import pad_sequence
+
 def crop_padding(data: np.ndarray, sr: int, point: int) -> np.ndarray:
     if data.shape[0] < point:
         size = data.shape[0]
@@ -162,3 +164,8 @@ class SoxEffects(nn.Module):
     def forward(self, wav: torch.Tensor, sample_rate: int) -> torch.Tensor:
         wav, _ = apply_effects_tensor(wav, sample_rate, self.effects)
         return wav
+
+def collate_batch(batch):
+    """Collate a whole batch of utterances."""
+    flatten = [u for s in batch for u in s]
+    return pad_sequence(flatten, batch_first=True, padding_value=0)
